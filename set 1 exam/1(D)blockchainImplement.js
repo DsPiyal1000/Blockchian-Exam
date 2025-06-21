@@ -1,29 +1,73 @@
 const crypto = require('crypto');
 
-function createMerkleTree(transactions) {
-    if (transactions.length === 0) {
-        return null;
+class Block {
+    constructor(transactions, previousHash) {
+        this.timestamp = Date.now();
+        this.transactions = transactions || [];
+        this.previousHash = previousHash || '0';
+        this.nonce = 0;
+        this.hash = this.calculateHash();
     }
     
-    let currentLevel = transactions.slice();
+    calculateHash() {
+        return crypto.createHash('sha256')
+            .update(
+                this.previousHash + 
+                this.timestamp + 
+                JSON.stringify(this.transactions) + 
+                this.nonce
+            )
+            .digest('hex');
+    }
     
-    while (currentLevel.length > 1) {
-        const nextLevel = [];
+    mineBlock(difficulty) {
+        const target = Array(difficulty + 1).join('0');
         
-        for (let i = 0; i < currentLevel.length; i += 2) {
-            const left = currentLevel[i];
-            const right = (i + 1 < currentLevel.length) ? 
-                         currentLevel[i + 1] : currentLevel[i];
-            
-            const combined = left + right;
-            const hashResult = crypto.createHash('sha256')
-                                   .update(combined)
-                                   .digest('hex');
-            nextLevel.push(hashResult);
+        while (this.hash.substring(0, difficulty) !== target) {
+            this.nonce++;
+            this.hash = this.calculateHash();
         }
         
-        currentLevel = nextLevel;
+        console.log(`Block mined: ${this.hash}`);
+    }
+}
+
+class Blockchain {
+    constructor() {
+        this.chain = [this.createGenesisBlock()];
+        this.difficulty = 4;
     }
     
-    return currentLevel[0];
+    createGenesisBlock() {
+        return new Block([], '0');
+    }
+    
+    getLatestBlock() {
+        return this.chain[this.chain.length - 1];
+    }
+    
+    mineBlock(transactions, difficulty = this.difficulty) {
+        const newBlock = new Block(transactions, this.getLatestBlock().hash);
+        newBlock.mineBlock(difficulty);
+        this.chain.push(newBlock);
+        return newBlock;
+    }
+    
+    isValidChain() {
+        for (let i = 1; i < this.chain.length; i++) {
+            const currentBlock = this.chain[i];
+            const previousBlock = this.chain[i - 1];
+            
+            if (currentBlock.hash !== currentBlock.calculateHash()) {
+                return false;
+            }
+            
+            if (currentBlock.previousHash !== previousBlock.hash) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
+
+module.exports = { Block, Blockchain };
